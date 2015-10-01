@@ -9,13 +9,15 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/howeyc/fsnotify"
 	"go/build"
 	"log"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strings"
+
+	"github.com/howeyc/fsnotify"
 )
 
 var (
@@ -271,6 +273,30 @@ func rerun(buildpath string, args []string) (err error) {
 	return
 }
 
+func stripGopath(fullPath string) (string, error) {
+	p, err := filepath.Rel(filepath.Join(os.Getenv("GOPATH"), "src"), fullPath)
+	if err != nil {
+		return "", err
+	}
+	return p, nil
+}
+
+func getProjectPath(buildpath string) (string, error) {
+	p, err := filepath.Abs(buildpath)
+	if err != nil {
+		return "", err
+	}
+	if _, err := os.Stat(p); os.IsNotExist(err) {
+		return buildpath, nil
+	}
+	buildpath, err = stripGopath(p)
+	if err != nil {
+		return "", err
+	}
+
+	return buildpath, nil
+}
+
 func main() {
 	flag.Parse()
 
@@ -280,7 +306,13 @@ func main() {
 
 	buildpath := flag.Args()[0]
 	args := flag.Args()[1:]
-	err := rerun(buildpath, args)
+
+	project, err := getProjectPath(buildpath)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	err = rerun(strings.Replace(project, "\\", "/", -1), args)
 	if err != nil {
 		log.Print(err)
 	}
